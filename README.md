@@ -42,6 +42,14 @@ Reading material:
 
 The chipset ASM1351 seems to support the required commands but I have not found a product that uses this chipset and meets my other requirements.
 
+## Benchmarks:
+
+```bash
+$ tar --acl -cpf - -C /srv/dev-disk-by-uuid-<uuid> . | pv -trabpte | nc -q0 ras-nas 8888
+
+  342GiB 2:08:44 [45.4MiB/s] [45.4MiB/s] 100%
+```
+
 ## Reading Material
 
 - [OpenZFS - Building ZFS](https://openzfs.github.io/openzfs-docs/Developer%20Resources/Building%20ZFS.html)
