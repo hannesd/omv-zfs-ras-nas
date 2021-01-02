@@ -132,20 +132,22 @@ sudo bash install-omv.sh -n
 
 OMV's network setup leads to non-critical errors in debian's network scripts. I did not look into that matter and simply disabled OMV's network setup since I do not need OMV to manage the Raspberry Pi's network interface and I like my start-up sequence free of error messages.
 
+Do not configure OMV just yet.
+
 ### 5. Install ZFS
 
 Run the following commands to install prerequisites for the buid process.
 
 ```bash
-$ apt install -y build-essential autoconf automake libtool gawk alien fakeroot dkms libblkid-dev uuid-dev libudev-dev libssl-dev zlib1g-dev libaio-dev libattr1-dev libelf-dev python3 python3-dev python3-setuptools python3-cffi libffi-dev
-$ apt install -y raspberrypi-kernel-headers
-$ apt install -y git
+$ sudo apt install -y build-essential autoconf automake libtool gawk alien fakeroot dkms libblkid-dev uuid-dev libudev-dev libssl-dev zlib1g-dev libaio-dev libattr1-dev libelf-dev python3 python3-dev python3-setuptools python3-cffi libffi-dev
+$ sudo apt install -y raspberrypi-kernel-headers
+$ sudo apt install -y git
 ```
 
 The procedure described here works not only on Raspberry Pi OS. If you are building on a "normal" debian system install the following kernel headers instead of `raspberrypi-kernel-headers`:
 
 ```bash
-$ apt install -y linux-headers-$(uname -r)
+$ sudo apt install -y linux-headers-$(uname -r)
 ```
 
 Now run the following commands to build ZFS. Make sure that your Raspberry Pi does not overheat.
@@ -213,12 +215,53 @@ $ sudo systemctl enable zfs-import-cache.service zfs-import.target zfs-mount.ser
 If you do not plan to install the OMV ZFS plugin, you may want to manually setup zfs-zed in `/etc/zfs/zed.d/zed.rc`.
 Otherwise you can leave this file alone for now.
 
-### 6. Create ZFS Pools and Filesystems
+### 6. Install the OMV ZFS plugin
 
-zpool create -O acltype=posixacl -O xattr=sa -O atime=off -O dnodesize=auto -o ashift=12 tank mirror /dev/sda /dev/sdb
+Now install the OMV ZFS plugin, but not the one available by default in "Plugins" on the OMV web admin page. The original plugin comes with all sorts of dependencies we do not want and which would not work for us. Instead let's build are own version of the debian package:
 
+```bash
+$ git clone https://github.com/OpenMediaVault-Plugin-Developers/openmediavault-zfs.git
+$ cd openmediavault-zfs
+$ wget -O - https://github.com/hannesd/omv-zfs-ras-nas/raw/main/openmediavault-zfs-nozfsdeps.patch | git apply
+$ fakeroot debian/rules clean binary
+```
 
-### 7. Automatic Snapshots
+The debian package is written to TODO.
+
+You can upload it over the OMV web interface and install it. Make sure to isntall the `...-nozfsdeps` package instead of the original.
+
+### 7. Create ZFS Pools and Filesystems
+
+Now one can create ZFS pools and filesystems through the OMV admin interface. Personally I prefer to do this on the console:
+
+```bash
+$ sudo zpool create -O acltype=posixacl -O xattr=sa -O atime=off -O dnodesize=auto -o ashift=12 tank mirror /dev/sda /dev/sdb
+```
+
+- The attributes `acltype` and `xattr` allow us to use ACLs on the filesystems.
+- I have read somewhere that `dnodesize=auto` is good for your karma, so I have added it here.
+- The attribute `ashift` has to be set to your drive's sector size. It is the exponent in 2^12 = 4096 = 4K sector size. Adapt it to your needs.
+- The pool is called "tank" and is a mirror setup consisting of my two hard-drives `sda` and `sdb`.
+
+Every pool automatically comes with a root filesystem that will be mounted at `/tank`. I recommend not using that and instead create individual filesystems for your needs. For example:
+
+```bash
+sudo zfs create pool/homes
+sudo zfs create pool/shared
+```
+
+These filesystems will inherit the settings we used during pool creation but can be customized (except for the pool-specific settings).
+
+To make sure that the pool is imported on system startup we have to make sure that a `cachefile` exists for our pool:
+
+```bash
+$ sudo zpool set cachefile=/etc/zfs/zpool.cache tank
+```
+
+This file is read by the systemd service `zfs-import-cache.service` which will then import the corresponding pools. 
+Afterwards the systemd service `zfs-mount.service` will mount all filesystems found in the imported pools.
+
+### 8. Automatic Snapshots
 
 **Warning:** Enabling automatic snapshots probably prevents your drives from spinning down *ever*, though I have not verified this.
 
