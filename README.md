@@ -10,13 +10,19 @@ Documentation of my [openmediavault](https://www.openmediavault.org/) [OpenZFS](
 - I want a system that I can run 24/7 with minimal power consumption.
 - RAID is not supported by OMV when the hard disks are connected via USB. Technically using RAID with USB disks is possible but unreliable and dangerous.
 - ZFS has some awesome features:
-  - Mirroring (replaced RAID)
-  - Snapshots
-  - Smart behavior when recovering from a failure (only syncs real data, not the entire drive)
-  - Supports volumes (replaces LVM)
-  - Supports encryption (replaces LUKS)
+  - Supports (among other RAID-like modes) mirroring (replaces mdadm).
+  - Supports snapshots.
+  - Supports volumes (replaces LVM).
+  - Supports encryption (replaces LUKS).
+  - Supports compression.
+  - ZFS can directly transfer snapshots to other machines, thus facilitating easy and fast off-site backup strategies.
+  - Smart behavior when recovering from a failure (only syncs real data, not the entire drive).
 
-## My Rig
+## Disclaimer
+
+RAID is not a backup, it only protects you from a hard-drive failure. ZFS' support for snapshots adds some limited backup functionality. I still recommend a regular off-site backup.
+
+## Hardware
 
 - Raspberry Pi 4 with 4GB RAM.
 - A case with a fan.
@@ -26,17 +32,24 @@ Documentation of my [openmediavault](https://www.openmediavault.org/) [OpenZFS](
 - An extra USB power supply with two USB ports to supply the hard-drives with enough power, especially during spin-up.
 - The hard-drives are connected to the Raspberry Pi and the extra USB power supply using USB Y-cables and two cheap USB-SATA adapters.
 
+## Unsolved Problems:
+
+The cheap USB-SATA adapters have a JSM (JMicron) Chipset which cannot properly handle some hdparm/smartctl commands. Configuring power management seems to work but querying whether the drive has spun down does not work. This currently prevents me from making the device spin down because it is woken up regularly for snapshots.
+
+Reading material:
+- [Smartmontools USB Device Support](https://www.smartmontools.org/wiki/Supported_USB-Devices)
+- [Smartmontools USB Device Support (unsupported devices)](https://www.smartmontools.org/wiki/Unsupported_USB-Devices)
+
+The chipset ASM1351 seems to support the required commands but I have not found a product that uses this chipset and meets my other requirements.
+
 ## Reading Material
 
 - [OpenZFS - Building ZFS](https://openzfs.github.io/openzfs-docs/Developer%20Resources/Building%20ZFS.html)
 - [NAS-Server mit Raspberry Pi und OpenMediaVault einrichten](https://www.heise.de/download/blog/NAS-Server-mit-Raspberry-Pi-und-OpenMediaVault-einrichten-3468200) (in german)
 - [Raspberry Pi 4: Minimalistisches NAS mit ZFS-Dateiverwaltung selbst bauen](https://www.heise.de/ratgeber/Raspberry-Pi-4-Minimalistisches-NAS-mit-ZFS-Dateiverwaltung-selbst-bauen-4927272.html?seite=all) (behind paywall, in german)
 - [Introducing Raspberry Pi Imager, our new imaging utility](https://www.raspberrypi.org/blog/raspberry-pi-imager-imaging-utility/)
-
-## Download Locations
-
-- [Raspberry Pi Imager](https://www.raspberrypi.org/software/)
 - [64-Bit-Version von Raspberry Pi OS](https://www.heise.de/news/64-Bit-Version-von-Raspberry-Pi-OS-4771111.html) (in german)
+- [NAS with ZFS on Raspberry Pi 4](https://www.nasbeery.de/)
 
 ## Setup Steps
 
@@ -85,6 +98,24 @@ To configure your Raspberry Pi OS run:
 $ sudo raspi-config
 ```
 
+**Recommendations:**
+
+These are just my personal preferences:
+
+- Enable SSH in `raspi-config`.
+- Use `ssh-copy-id` to transfer your public SSH keys to the Raspberry Pi.
+- Disable root login and password authentication in `/etc/ssh/sshd_config`.
+- Install `tmux` for remote work on the Raspberry Pi.
+- Enable mouse support in tmux:
+  - Install `gpm`.
+  - Add `set -g mouse on` to ~/.tmux.conf (you probably have to create it first).
+- Install `glances`, and `dstat` for system performance measurements.
+- Disable swap:
+```bash
+sudo systemctl stop dphys-swapfile.service
+sudo systemctl disable dphys-swapfile.service
+```
+
 ### 4. Install OMV
 
 Download the installer script:
@@ -100,6 +131,112 @@ sudo bash install-omv.sh -n
 ```
 
 OMV's network setup leads to non-critical errors in debian's network scripts. I did not look into that matter and simply disabled OMV's network setup since I do not need OMV to manage the Raspberry Pi's network interface and I like my start-up sequence free of error messages.
+
+### 5. Install ZFS
+
+Run the following commands to install prerequisites for the buid process.
+
+```bash
+$ apt install -y build-essential autoconf automake libtool gawk alien fakeroot dkms libblkid-dev uuid-dev libudev-dev libssl-dev zlib1g-dev libaio-dev libattr1-dev libelf-dev python3 python3-dev python3-setuptools python3-cffi libffi-dev
+$ apt install -y raspberrypi-kernel-headers
+$ apt install -y git
+```
+
+The procedure described here works not only on Raspberry Pi OS. If you are building on a "normal" debian system install the following kernel headers instead of `raspberrypi-kernel-headers`:
+
+```bash
+$ apt install -y linux-headers-$(uname -r)
+```
+
+Now run the following commands to build ZFS. Make sure that your Raspberry Pi does not overheat.
+
+```bash
+$ git clone https://github.com/openzfs/zfs
+$ cd ./zfs
+$ git checkout zfs-2.0.0
+$ sh autogen.sh
+$ autoreconf --install --force
+$ ./configure
+$ make -s -j$(nproc)
+```
+
+To create debian packages, run:
+
+```bash
+$ pushd /usr/lib/rpm/platform
+$ sudo ln -s armv7hnl-linux-gnueabihf armv7hnl-linux
+$ popd
+$ cd ./zfs
+$ make deb
+```
+
+To install the debian packages, run:
+
+```bash
+$ cd ./zfs
+$ sudo dpkg -i $( ls -1 *.deb | grep -v '\-devel' | grep -v '\-test' )
+```
+
+Test whether the ZFS module can be loaded:
+
+```bash
+$ modprobe zfs
+$ lsmod | grep zfs
+```
+
+The output of the last command should look something like this:
+
+```
+zfs                  3461120  6
+zunicode              331776  1 zfs
+zzstd                 430080  1 zfs
+zlua                  147456  1 zfs
+zcommon                98304  1 zfs
+znvpair                90112  2 zcommon,zfs
+zavl                   16384  1 zfs
+icp                   294912  1 zfs
+spl                   106496  7 znvpair,zcommon,zfs,icp,zzstd,zlua,zavl
+```
+
+Make sure the ZFS module is loaded at boot:
+
+```bash
+$ echo "zfs" >> /etc/modules
+```
+
+Enable ZFS services at boot:
+
+```bash
+$ sudo systemctl enable zfs-import-cache.service zfs-import.target zfs-mount.service zfs-zed.service zfs.target
+```
+
+If you do not plan to install the OMV ZFS plugin, you may want to manually setup zfs-zed in `/etc/zfs/zed.d/zed.rc`.
+Otherwise you can leave this file alone for now.
+
+### 6. Create ZFS Pools and Filesystems
+
+zpool create -O acltype=posixacl -O xattr=sa -O atime=off -O dnodesize=auto -o ashift=12 tank mirror /dev/sda /dev/sdb
+
+
+### 7. Automatic Snapshots
+
+**Warning:** Enabling automatic snapshots probably prevents your drives from spinning down *ever*, though I have not verified this.
+
+To enable automatic snapshots at various intervals, do the following:
+
+```bash
+$ wget -O zfs-auto-snapshot.tar.gz https://github.com/zfsonlinux/zfs-auto-snapshot/archive/upstream/1.2.4.tar.gz
+$ tar -xzf zfs-auto-snapshot.tar.gz
+$ cd zfs-auto-snapshot-upstream-*
+$ sudo make install
+```
+
+Change the number of kept snapshots to match your personal preferences:
+
+```bash
+sudo sed -i 's/keep=24/keep=48/g' /etc/cron.hourly/zfs-auto-snapshot
+sudo sed -i 's/keep=12/keep=3/g' /etc/cron.monthly/zfs-auto-snapshot
+```
 
 [cc-by-sa]: http://creativecommons.org/licenses/by-sa/4.0/
 [cc-by-sa-shield]: https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg
