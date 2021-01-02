@@ -226,7 +226,7 @@ $ wget -O - https://github.com/hannesd/omv-zfs-ras-nas/raw/main/openmediavault-z
 $ fakeroot debian/rules clean binary
 ```
 
-The debian package is written to TODO.
+The debian package is written to `../openmediavault-zfs-nozfsdeps_<ver>_<arch>.deb`.
 
 You can upload it over the OMV web interface and install it. Make sure to isntall the `...-nozfsdeps` package instead of the original.
 
