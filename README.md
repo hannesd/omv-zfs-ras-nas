@@ -235,12 +235,13 @@ You can upload it over the OMV web interface and install it. Make sure to isntal
 Now one can create ZFS pools and filesystems through the OMV admin interface. Personally I prefer to do this on the console:
 
 ```bash
-$ sudo zpool create -O acltype=posixacl -O xattr=sa -O atime=off -O dnodesize=auto -o ashift=12 tank mirror /dev/sda /dev/sdb
+$ sudo zpool create -O acltype=posixacl -O xattr=sa -O atime=off -O dnodesize=auto -O compression=lz4 -o ashift=12 tank mirror /dev/sda /dev/sdb
 ```
 
 - The attributes `acltype` and `xattr` allow us to use ACLs on the filesystems.
 - I have read somewhere that `dnodesize=auto` is good for your karma, so I have added it here.
 - The attribute `ashift` has to be set to your drive's sector size. It is the exponent in 2^12 = 4096 = 4K sector size. Adapt it to your needs.
+- Set the compression to lz4 (default would be: none).
 - The pool is called "tank" and is a mirror setup consisting of my two hard-drives `sda` and `sdb`.
 
 Every pool automatically comes with a root filesystem that will be mounted at `/tank`. I recommend not using that and instead create individual filesystems for your needs. For example:
@@ -258,7 +259,7 @@ To make sure that the pool is imported on system startup we have to make sure th
 $ sudo zpool set cachefile=/etc/zfs/zpool.cache tank
 ```
 
-This file is read by the systemd service `zfs-import-cache.service` which will then import the corresponding pools. 
+This file is read by the systemd service `zfs-import-cache.service` which will then import the corresponding pools.
 Afterwards the systemd service `zfs-mount.service` will mount all filesystems found in the imported pools.
 
 ### 8. Automatic Snapshots
