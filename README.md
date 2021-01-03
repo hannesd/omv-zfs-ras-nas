@@ -44,10 +44,22 @@ The chipset ASM1351 seems to support the required commands but I have not found 
 
 ## Benchmarks:
 
-```bash
-$ tar --acl -cpf - -C /srv/dev-disk-by-uuid-<uuid> . | pv -trabpte | nc -q0 ras-nas 8888
+Sending a tar archive from a powerful machine to the ras-nas machine to store it on a ZFS filesystem:
 
-  342GiB 2:08:44 [45.4MiB/s] [45.4MiB/s] 100%
+```bash
+ras-nas:~# nc -l 8888 > {dest on zfs}
+
+nas:~# tar --acl -cpf - -C /srv/dev-disk-by-uuid-{uuid} . | pv -trabpte | nc -q0 ras-nas 8888
+       342GiB 2:08:44 [45.4MiB/s] [45.4MiB/s]
+```
+
+Sending a snapshot from the ras-nas machine to a powerful machine:
+
+```bash
+nas:~# nc -l 8888 | zfs receive {dest zfs filesystem}
+
+ras-nas:~# zfs send {source zfs filesystem} | pv -trabpte | nc -q0 nas 8888
+           341GiB 1:08:36 [85.0MiB/s] [85.0MiB/s]
 ```
 
 ## Reading Material
