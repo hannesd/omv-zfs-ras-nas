@@ -304,3 +304,7 @@ sudo sed -i 's/keep=12/keep=3/g' /etc/cron.monthly/zfs-auto-snapshot
 
 [cc-by-sa]: http://creativecommons.org/licenses/by-sa/4.0/
 [cc-by-sa-shield]: https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg
+
+## TODOs
+
+- dpkg-reconfigure locales
