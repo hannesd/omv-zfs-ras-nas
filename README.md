@@ -315,3 +315,10 @@ zpool import -d /dev/disk/by-partuuid/<uuid> /dev/disk/by-partuuid/<uuid>
 zpool import <pool-name>
 ```
 - Kernel update causes problems. Complete recompile necessary. Make sure new kernel-headers are also installed and up-to-date. Problematic how we suggest to install kernel headers in the text above.
+- One-liner after kernel-upgrade:
+```
+cd zfs
+git clean -xdf
+( sh autogen.sh && autoreconf --install --force && ./configure && make -s -j$(nproc) && make deb && dpkg -i $( ls -1 *.deb | grep -v '\-devel' | grep -v '\-test' ) ) &> logs
+modprobe zfs
+```
