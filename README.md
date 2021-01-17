@@ -308,3 +308,9 @@ sudo sed -i 's/keep=12/keep=3/g' /etc/cron.monthly/zfs-auto-snapshot
 ## TODOs
 
 - dpkg-reconfigure locales
+- Use different device names:
+```
+zpool export <pool-name>
+zpool import -d /dev/disk/by-partuuid/<uuid> /dev/disk/by-partuuid/<uuid>
+zpool import <pool-name>
+```
