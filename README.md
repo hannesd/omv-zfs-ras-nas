@@ -314,3 +314,4 @@ zpool export <pool-name>
 zpool import -d /dev/disk/by-partuuid/<uuid> /dev/disk/by-partuuid/<uuid>
 zpool import <pool-name>
 ```
+- Kernel update causes problems. Complete recompile necessary. Make sure new kernel-headers are also installed and up-to-date. Problematic how we suggest to install kernel headers in the text above.
