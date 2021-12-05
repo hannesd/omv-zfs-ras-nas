@@ -75,11 +75,13 @@ ras-nas:~# zfs send {source zfs filesystem} | pv -trabpte | nc -q0 nas 8888
 
 ### 1. Install Raspberry Pi OS to microSD Card
 
-Install the [Raspberry Pi Imager](https://www.raspberrypi.org/software/) software and install **Raspberry Pi OS Lite** (32-bit OS) to a microSD card.
+Install the [Raspberry Pi Imager](https://www.raspberrypi.org/software/) software.
 
-Alternatively you can try out the new but not yet officially released 64-bit version of Raspberry Pi OS. You can install [Raspberry Pi OS 64-bit images](https://downloads.raspberrypi.org/raspios_arm64/images/) using the Raspberry Pi Imager as well but you have to download them manually first.
+Install [Raspberry Pi OS 64-bit images](https://downloads.raspberrypi.org/raspios_arm64/images/) using the Raspberry Pi Imager (you have to download the image manually first).
 
 The ZFS filesystem is intended to be run on 64-bit operating systems but also works on 32-bit systems, albeit with reduced performance.
+
+Alternative: Install **Raspberry Pi OS Lite** (32-bit OS) to a microSD card.
 
 ### 2. Update your Raspberry Pi and your Raspberry Pi OS
 
@@ -129,7 +131,7 @@ These are just my personal preferences:
 - Enable mouse support in tmux:
   - Install `gpm`.
   - Add `set -g mouse on` to ~/.tmux.conf (you probably have to create it first).
-- Install `glances`, and `dstat` for system performance measurements.
+- Install `glances`, and `dstat` for system performance measurements. Use pip (deb package not available)
 - Disable swap:
 ```bash
 sudo systemctl stop dphys-swapfile.service
@@ -142,6 +144,15 @@ Download the installer script:
 
 ```bash
 wget -O install-omv.sh https://github.com/OpenMediaVault-Plugin-Developers/installScript/raw/master/install
+```
+
+Remove the following check in install-omv.sh:
+```bash
+if dpkg -l | grep -Eqw "gdm3|sddm|lxdm|xdm|lightdm|slim|wdm"; then
+  echo "This system is running a desktop environment!"
+  echo "This is not supported.  Exiting..."
+  exit 101
+fi
 ```
 
 Run the installer with the `-n` switch to skip the network setup:
@@ -175,7 +186,7 @@ Now run the following commands to build ZFS. Make sure that your Raspberry Pi do
 ```bash
 $ git clone https://github.com/openzfs/zfs
 $ cd ./zfs
-$ git checkout zfs-2.0.0
+$ git checkout zfs-2.1.1
 $ sh autogen.sh
 $ autoreconf --install --force
 $ ./configure
@@ -237,7 +248,7 @@ Otherwise you can leave this file alone for now.
 
 ### 6. Install the OMV ZFS plugin
 
-Now install the OMV ZFS plugin, but not the one available by default in "Plugins" on the OMV web admin page. The original plugin comes with all sorts of dependencies we do not want and which would not work for us. Instead let's build are own version of the debian package:
+Now install the OMV ZFS plugin, but not the one available by default in "Plugins" on the OMV web admin page. The original plugin comes with all sorts of dependencies we do not want and which would not work for us. Instead let's build our own version of the debian package:
 
 ```bash
 $ git clone https://github.com/OpenMediaVault-Plugin-Developers/openmediavault-zfs.git
@@ -313,6 +324,10 @@ sudo sed -i 's/keep=12/keep=3/g' /etc/cron.monthly/zfs-auto-snapshot
 zpool export <pool-name>
 zpool import -d /dev/disk/by-partuuid/<uuid> /dev/disk/by-partuuid/<uuid>
 zpool import <pool-name>
+```
+- Import all available pools:Ö
+```
+zpool import -a
 ```
 - Kernel update causes problems. Complete recompile necessary. Make sure new kernel-headers are also installed and up-to-date. Problematic how we suggest to install kernel headers in the text above.
 - One-liner after kernel-upgrade:
