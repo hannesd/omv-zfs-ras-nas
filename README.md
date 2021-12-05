@@ -329,6 +329,12 @@ zpool import <pool-name>
 ```
 zpool import -a
 ```
+- Get rid of unnecessary alerts on reboot
+```
+nano /etc/default/openmediavault  # Add or edit line: OMV_MONIT_DELAY_SECONDS="15" until alerts are not longer sent
+omv-salt stage run prepare
+omv-salt deploy run monit
+```
 - Kernel update causes problems. Complete recompile necessary. Make sure new kernel-headers are also installed and up-to-date. Problematic how we suggest to install kernel headers in the text above.
 - One-liner after kernel-upgrade:
 ```
