@@ -325,7 +325,7 @@ zpool export <pool-name>
 zpool import -d /dev/disk/by-partuuid/<uuid> /dev/disk/by-partuuid/<uuid>
 zpool import <pool-name>
 ```
-- Import all available pools:Ö
+- Import all available pools:
 ```
 zpool import -a
 ```
