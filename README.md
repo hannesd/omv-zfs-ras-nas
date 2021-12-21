@@ -321,7 +321,7 @@ sudo sed -i 's/keep=12/keep=3/g' /etc/cron.monthly/zfs-auto-snapshot
 - dpkg-reconfigure locales
 - Use different device names:
 ```
-zpool export <pool-name>
+zpool export <pool-name>`
 zpool import -d /dev/disk/by-partuuid/<uuid> /dev/disk/by-partuuid/<uuid>
 zpool import <pool-name>
 ```
@@ -344,3 +344,4 @@ git clean -xdf
 modprobe zfs
 ```
 - Close tmuxinator session: `Ctrl+b &`
+- List all zfs snapshots: `zfs list -t snapshot`
