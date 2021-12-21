@@ -343,3 +343,4 @@ git clean -xdf
 ( sh autogen.sh && autoreconf --install --force && ./configure && make -s -j$(nproc) && make deb && dpkg -i $( ls -1 *.deb | grep -v '\-devel' | grep -v '\-test' ) ) &> logs
 modprobe zfs
 ```
+- Close tmuxinator session: `Ctrl+b &`
