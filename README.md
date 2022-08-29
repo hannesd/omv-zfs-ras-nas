@@ -77,13 +77,13 @@ ras-nas:~# zfs send {source zfs filesystem} | pv -trabpte | nc -q0 nas 8888
 
 Install the [Raspberry Pi Imager](https://www.raspberrypi.org/software/) software.
 
-Install [Raspberry Pi OS 64-bit images](https://downloads.raspberrypi.org/raspios_arm64/images/) using the Raspberry Pi Imager (you have to download the image manually first).
+Click on "Choose OS", then "Raspberry Pi OS (**other**)", then select "Raspberry Pi OS **Lite** (**64-bit**)"
 
 The ZFS filesystem is intended to be run on 64-bit operating systems but also works on 32-bit systems, albeit with reduced performance.
 
-Alternative: Install **Raspberry Pi OS Lite** (32-bit OS) to a microSD card.
-
 ### 2. Update your Raspberry Pi and your Raspberry Pi OS
+
+To avoid locale warnings you should run `sudo raspi-config` right away and select the locales of your choice, and most importantly, select a default locale, then reboot.
 
 To update the OS, run:
 
@@ -131,7 +131,7 @@ These are just my personal preferences:
 - Enable mouse support in tmux:
   - Install `gpm`.
   - Add `set -g mouse on` to ~/.tmux.conf (you probably have to create it first).
-- Install `glances`, and `dstat` for system performance measurements. Use pip (deb package not available)
+- Install `glances`, and `dstat` for system performance measurements. `glances` is not available in debian, use pip for installation instead: `sudo apt install python3-pip && sudo pip3 install glances`
 - Disable swap:
 ```bash
 sudo systemctl stop dphys-swapfile.service
@@ -146,14 +146,7 @@ Download the installer script:
 wget -O install-omv.sh https://github.com/OpenMediaVault-Plugin-Developers/installScript/raw/master/install
 ```
 
-Remove the following check in install-omv.sh:
-```bash
-if dpkg -l | grep -Eqw "gdm3|sddm|lxdm|xdm|lightdm|slim|wdm"; then
-  echo "This system is running a desktop environment!"
-  echo "This is not supported.  Exiting..."
-  exit 101
-fi
-```
+OMV's network setup leads to non-critical errors in debian's network scripts. I did not look into that matter and simply disabled OMV's network setup since I do not need OMV to manage the Raspberry Pi's network interface and I like my start-up sequence free of error messages.
 
 Run the installer with the `-n` switch to skip the network setup:
 
@@ -161,53 +154,17 @@ Run the installer with the `-n` switch to skip the network setup:
 sudo bash install-omv.sh -n
 ```
 
-OMV's network setup leads to non-critical errors in debian's network scripts. I did not look into that matter and simply disabled OMV's network setup since I do not need OMV to manage the Raspberry Pi's network interface and I like my start-up sequence free of error messages.
-
 Do not configure OMV just yet.
 
 ### 5. Install ZFS
 
-Run the following commands to install prerequisites for the buid process.
+Nowadays, ZFS can be installed from backports (bullseye):
 
 ```bash
-$ sudo apt install -y build-essential autoconf automake libtool gawk alien fakeroot dkms libblkid-dev uuid-dev libudev-dev libssl-dev zlib1g-dev libaio-dev libattr1-dev libelf-dev python3 python3-dev python3-setuptools python3-cffi libffi-dev
-$ sudo apt install -y raspberrypi-kernel-headers
-$ sudo apt install -y git
-```
-
-The procedure described here works not only on Raspberry Pi OS. If you are building on a "normal" debian system install the following kernel headers instead of `raspberrypi-kernel-headers`:
-
-```bash
-$ sudo apt install -y linux-headers-$(uname -r)
-```
-
-Now run the following commands to build ZFS. Make sure that your Raspberry Pi does not overheat.
-
-```bash
-$ git clone https://github.com/openzfs/zfs
-$ cd ./zfs
-$ git checkout zfs-2.1.1
-$ sh autogen.sh
-$ autoreconf --install --force
-$ ./configure
-$ make -s -j$(nproc)
-```
-
-To create debian packages, run:
-
-```bash
-$ pushd /usr/lib/rpm/platform
-$ sudo ln -s armv7hnl-linux-gnueabihf armv7hnl-linux
-$ popd
-$ cd ./zfs
-$ make deb
-```
-
-To install the debian packages, run:
-
-```bash
-$ cd ./zfs
-$ sudo dpkg -i $( ls -1 *.deb | grep -v '\-devel' | grep -v '\-test' )
+echo "deb http://deb.debian.org/debian bullseye-backports main" | sudo tee -a /etc/apt/sources.list
+sudo apt update
+sudo apt install raspberrypi-kernel-headers
+sudo apt install -t bullseye-backports zfsutils-linux zfs-dkms zfs-zed
 ```
 
 Test whether the ZFS module can be loaded:
@@ -234,7 +191,7 @@ spl                   106496  7 znvpair,zcommon,zfs,icp,zzstd,zlua,zavl
 Make sure the ZFS module is loaded at boot:
 
 ```bash
-$ echo "zfs" >> /etc/modules
+$ echo "zfs" | sudo tee -a /etc/modules
 ```
 
 Enable ZFS services at boot:
@@ -248,18 +205,9 @@ Otherwise you can leave this file alone for now.
 
 ### 6. Install the OMV ZFS plugin
 
-Now install the OMV ZFS plugin, but not the one available by default in "Plugins" on the OMV web admin page. The original plugin comes with all sorts of dependencies we do not want and which would not work for us. Instead let's build our own version of the debian package:
+This step requires the installation of kernel headers for our system. This happened in the previous step (5. Install ZFS) already.
 
-```bash
-$ git clone https://github.com/OpenMediaVault-Plugin-Developers/openmediavault-zfs.git
-$ cd openmediavault-zfs
-$ wget -O - https://github.com/hannesd/omv-zfs-ras-nas/raw/main/openmediavault-zfs-nozfsdeps.patch | git apply
-$ fakeroot debian/rules clean binary
-```
-
-The debian package is written to `../openmediavault-zfs-nozfsdeps_<ver>_<arch>.deb`.
-
-You can upload it over the OMV web interface and install it. Make sure to isntall the `...-nozfsdeps` package instead of the original.
+In the OMV web frontend, go to `System` -> `Plugins` and install `openmediavault-zfs` (not the `armhf` version).
 
 ### 7. Create ZFS Pools and Filesystems
 
@@ -278,8 +226,8 @@ $ sudo zpool create -O acltype=posixacl -O xattr=sa -O atime=off -O dnodesize=au
 Every pool automatically comes with a root filesystem that will be mounted at `/tank`. I recommend not using that and instead create individual filesystems for your needs. For example:
 
 ```bash
-sudo zfs create pool/homes
-sudo zfs create pool/shared
+sudo zfs create tank/homes
+sudo zfs create tank/shared
 ```
 
 These filesystems will inherit the settings we used during pool creation but can be customized (except for the pool-specific settings).
@@ -290,8 +238,7 @@ To make sure that the pool is imported on system startup we have to make sure th
 $ sudo zpool set cachefile=/etc/zfs/zpool.cache tank
 ```
 
-This file is read by the systemd service `zfs-import-cache.service` which will then import the corresponding pools.
-Afterwards the systemd service `zfs-mount.service` will mount all filesystems found in the imported pools.
+This file is read by the systemd service `zfs-import-cache.service` which will then import the corresponding pools. Afterwards the systemd service `zfs-mount.service` will mount all filesystems found in the imported pools.
 
 ### 8. Automatic Snapshots
 
@@ -318,10 +265,9 @@ sudo sed -i 's/keep=12/keep=3/g' /etc/cron.monthly/zfs-auto-snapshot
 
 ## TODOs
 
-- dpkg-reconfigure locales
 - Use different device names:
 ```
-zpool export <pool-name>`
+zpool export <pool-name>
 zpool import -d /dev/disk/by-partuuid/<uuid> /dev/disk/by-partuuid/<uuid>
 zpool import <pool-name>
 ```
@@ -334,14 +280,6 @@ zpool import -a
 nano /etc/default/openmediavault  # Add or edit line: OMV_MONIT_DELAY_SECONDS="15" until alerts are not longer sent
 omv-salt stage run prepare
 omv-salt deploy run monit
-```
-- Kernel update causes problems. Complete recompile necessary. Make sure new kernel-headers are also installed and up-to-date. Problematic how we suggest to install kernel headers in the text above.
-- One-liner after kernel-upgrade:
-```
-cd zfs
-git clean -xdf
-( sh autogen.sh && autoreconf --install --force && ./configure && make -s -j$(nproc) && make deb && dpkg -i $( ls -1 *.deb | grep -v '\-devel' | grep -v '\-test' ) ) &> logs
-modprobe zfs
 ```
 - Close tmuxinator session: `Ctrl+b &`
 - List all zfs snapshots: `zfs list -t snapshot`
